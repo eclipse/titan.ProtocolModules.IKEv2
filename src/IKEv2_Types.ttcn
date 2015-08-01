@@ -1,0 +1,699 @@
+/******************************************************************************
+* Copyright (c) 2005, 2015  Ericsson AB
+* All rights reserved. This program and the accompanying materials
+* are made available under the terms of the Eclipse Public License v1.0
+* which accompanies this distribution, and is available at
+* http://www.eclipse.org/legal/epl-v10.html
+*
+* Contributors:
+* Gabor Szalai
+* Eszter Susanszky
+******************************************************************************/
+//
+//  File:               IKEv2_Types.ttcn
+//  Description:        
+//  Rev:                R2A
+//  Prodnr:             CNL 113 801
+//  Reference:          http://tools.ietf.org/search/rfc4306
+//
+///////////////////////////////////////////////////////////////////////////////
+
+module IKEv2_Types
+{
+  import from General_Types all;
+  
+  external function ef_IKEv2_encode(in IKEv2_Message pl_pdu, in boolean pl_set_payload_type, out octetstring pl_stream)
+  
+  external function ef_IKEv2_decode(in octetstring pl_stream, out IKEv2_Message pl_pdu) return integer
+    with { extension "prototype(backtrack)" }
+  
+  external function ef_IKEv2_Payloads_encode(in IKEv2_Payloads pl_payloads) return octetstring with {
+    extension "prototype(convert)";
+    extension "encode(RAW)"
+  }
+  
+  external function ef_IKEv2_Payloads_decode(in octetstring pl_stream, in Next_Payload_Type pl_type, out IKEv2_Payloads pl_payload_list) return integer
+ //   with { extension "prototype(backtrack)" };
+  
+  
+  type record IKEv2_Message
+  {
+    IKEv2_Header              header,
+    IKEv2_Payloads            payload_list optional
+  } with {
+    variant (header) "LENGTHTO(header, payload_list)"
+    variant (header) "LENGTHINDEX (message_length)"
+  }
+  
+  type record IKEv2_Header
+  {
+    OCT8                      initiators_spi,
+    OCT8                      responders_spi,
+    Next_Payload_Type         next_payload_type,
+    INT4b                     major_version,
+    INT4b                     minor_version,
+    Exchange_Type             exchange_type,
+    Flags                     flags,
+    LIN4_BO_LAST              message_id,
+    LIN4_BO_LAST              message_length
+  } with {
+    variant (next_payload_type) "FIELDLENGTH (8)"
+    variant (exchange_type) "FIELDLENGTH(8)"
+    variant (major_version, minor_version) "FIELDORDER(msb)"
+  }
+  
+  type record Flags
+  {
+    INT2b                     reserved(0),
+    BIT1                      response,
+    BIT1                      version,
+    BIT1                      initiator,
+    INT3b                     rsrvd(0)
+  } with {
+    variant (reserved, rsrvd) "BITORDER(msb)"
+    variant (reserved, initiator, version, response, rsrvd) "FIELDORDER(msb)"
+  }
+  
+  type set of IKEv2_Payload IKEv2_Payloads with { variant "" }
+  
+  type record Payload_Header
+  {
+    Next_Payload_Type         next_payload_type,
+    BIT1                      critical,
+    INT7b                     reserved (0),
+    LIN2_BO_LAST              payload_length
+  } with {
+    variant (next_payload_type) "FIELDLENGTH(8)"
+    variant (critical, reserved) "FIELDORDER(msb)"
+  }
+  
+  type union IKEv2_Payload
+  {
+    Security_Association_Payload      security_association_payload,   //33
+    Key_Exchange_Payload              key_exchange_payload,           //34
+    Identification_Payload            id_initiator_payload,           //35
+    Identification_Payload            id_responder_payload,           //36
+    Certificate_Payload               certificate_payload,            //37
+    Certificate_Request_Payload       certificate_request_payload,    //38
+    Authentication_Payload            authentication_payload,         //39
+    Nonce_Payload                     nonce_payload,                  //40
+    Notify_Payload                    notify_payload,                 //41
+    Delete_Payload                    delete_payload,                 //42
+    Vendor_ID_Payload                 vendor_id_payload,              //43
+    Traffic_Selector_Payload          ts_initiator_payload,           //44
+    Traffic_Selector_Payload          ts_responder_payload,           //45
+    Encrypted_Payload                 encrypted_payload,              //46
+    Configuration_Payload             configuration_payload,          //47
+    EAP_Payload                       eap_payload                     //48
+  } with {
+    variant ""
+  }
+  
+  type record Security_Association_Payload
+  {  
+    Payload_Header            payload_header,
+    Proposal                  proposal
+  } with {
+    variant (payload_header) "LENGTHTO (payload_header, proposal)"
+    variant (payload_header) "LENGTHINDEX (payload_length)"
+  }
+  
+  type record Proposal
+  {
+    INT1                      is_last,
+    INT1                      reserved(0),
+    LIN2_BO_LAST              proposal_length,
+    INT1                      proposal_number,
+    Protocol_Id               protocol_id,
+    INT1                      spi_size,
+    INT1                      nr_of_transforms,
+    octetstring               spi optional,
+    Transforms                transforms
+  } with {
+    variant (protocol_id) "FIELDLENGTH (8)"
+    variant (proposal_length) "LENGTHTO(is_last, reserved, proposal_length, proposal_number, protocol_id, spi_size, nr_of_transforms, spi, transforms)"
+    variant (spi_size) "LENGTHTO(spi)"
+    variant (nr_of_transforms) "LENGTHTO(transforms)"
+    variant (nr_of_transforms) "UNIT(elements)"
+  }
+  
+  type record of Transform Transforms;
+  
+  type record Transform
+  {
+    INT1                      is_last,
+    INT1                      reserved(0),
+    LIN2_BO_LAST              transform_length,
+    Transform_Type            transform_type,
+    INT1                      rsrvd(0),
+    Transform_Id              transform_id,
+    Transform_Attributes      transform_attributes optional
+  } with {
+    variant (transform_type) "FIELDLENGTH (8)"
+    variant (transform_length) "LENGTHTO(is_last, reserved, transform_length, transform_type, rsrvd, transform_id, transform_attributes)"
+    variant (transform_id) "CROSSTAG(
+    encr, transform_type = ENCR;
+    prf, transform_type = PRF;
+    auth, transform_type = INTEG;
+    dh, transform_type = DH;
+    esn, transform_type = ESN)"
+  }
+  
+  type union Transform_Id
+  {
+    ENCR                      encr,
+    PRF                       prf,
+    AUTH                      auth,
+    DH                        dh,
+    ESN                       esn
+  } with {
+    variant (encr, prf, auth, dh, esn) "FIELDLENGTH (16)"
+    variant (encr, prf, auth, dh, esn) "BYTEORDER(last)"
+  }
+  
+  type record of Transform_Attribute Transform_Attributes;
+  
+  type record Transform_Attribute
+  {
+    BIT1                      af,
+    Transform_Attribute_Type  attribute_type,
+    Transform_Attribute_Value attribute
+  } with {
+    variant (af, attribute_type) "FIELDORDER(msb)"
+    variant (attribute_type) "FIELDLENGTH(15)"
+    variant (attribute_type) "BYTEORDER(last)"
+    variant (attribute) "CROSSTAG(
+    fixed_length, af = '1'B;
+    variable_length, af = '0'B)"
+  }
+  
+  type union Transform_Attribute_Value
+  {
+    Variable_Length_Attribute variable_length,
+    Fixed_Length_Attribute    fixed_length
+  }
+  
+  type record Fixed_Length_Attribute
+  {
+    OCT2                      attribute_value
+  }
+  
+  type record Variable_Length_Attribute
+  {
+    LIN2_BO_LAST              attribute_length,
+    octetstring               attribute_value
+  }
+  
+  type record Key_Exchange_Payload
+  {
+    Payload_Header            payload_header,
+    DH                        diffie_hellman_group,
+    LIN2_BO_LAST              reserved(0),
+    octetstring               key_exchange_data
+  } with {
+    variant (payload_header) "LENGTHTO (payload_header, diffie_hellman_group, reserved, key_exchange_data)"
+    variant (payload_header) "LENGTHINDEX (payload_length)"
+    variant (diffie_hellman_group) "BYTEORDER(last)"
+    variant (diffie_hellman_group) "FIELDLENGTH(16)"
+  }
+  
+  type record Identification_Payload
+  {
+    Payload_Header           payload_header,
+    Id_Type                  id_type,
+    LIN3_BO_LAST             reserved(0),
+    octetstring              identification_data
+  } with {
+    variant (payload_header) "LENGTHTO (payload_header, id_type, reserved, identification_data)"
+    variant (payload_header) "LENGTHINDEX (payload_length)"
+    variant (id_type) "FIELDLENGTH (8)"
+  }
+  
+  type record Certificate_Payload 
+  {
+    Payload_Header           payload_header,
+    Certificate_Encoding     certificate_encoding,
+    octetstring              certificate_data
+  } with {
+    variant (payload_header) "LENGTHTO (payload_header, certificate_encoding, certificate_data)"
+    variant (payload_header) "LENGTHINDEX (payload_length)"
+    variant (certificate_encoding) "FIELDLENGTH (8)"
+  }
+  
+  type record Certificate_Request_Payload
+  {
+    Payload_Header           payload_header,
+    Certificate_Encoding     certificate_encoding,
+    octetstring              certification_authority
+  } with {
+    variant (payload_header) "LENGTHTO (payload_header, certificate_encoding, certification_authority)"
+    variant (payload_header) "LENGTHINDEX (payload_length)"
+    variant (certificate_encoding) "FIELDLENGTH (8)"
+  }
+  
+  type record Authentication_Payload
+  {
+    Payload_Header           payload_header,
+    Authentication_Method    authentication_method,
+    LIN3_BO_LAST             reserved(0),
+    octetstring              authentication_data
+  } with {
+    variant (payload_header) "LENGTHTO (payload_header, authentication_method, reserved, authentication_data)"
+    variant (payload_header) "LENGTHINDEX (payload_length)"
+    variant (authentication_method) "FIELDLENGTH (8)"
+  }
+  
+  type record Nonce_Payload
+  {
+    Payload_Header           payload_header,
+    octetstring              nonce_data
+  } with {
+    variant (payload_header) "LENGTHTO (payload_header, nonce_data)"
+    variant (payload_header) "LENGTHINDEX (payload_length)"
+  }
+  
+  type record Notify_Payload
+  {
+    Payload_Header           payload_header,
+    Protocol_Id              protocol_id,
+    INT1                     spi_size,
+    Notify_Message_Type      notify_message_type,
+    octetstring              spi optional,
+    octetstring              notification_data optional
+  } with {
+    variant (payload_header) "LENGTHTO (payload_header, protocol_id, spi_size, notify_message_type, spi, notification_data)"
+    variant (payload_header) "LENGTHINDEX (payload_length)"
+    variant (protocol_id) "FIELDLENGTH (8)"
+    variant (notify_message_type) "FIELDLENGTH (16)"
+    variant (notify_message_type) "BYTEORDER(last)"
+    variant (spi_size) "LENGTHTO(spi)"
+  }
+  
+  type record Delete_Payload
+  {
+    Payload_Header           payload_header,
+    Protocol_Id              protocol_id,
+    INT1                     spi_size,
+    LIN2_BO_LAST             nr_of_spis,
+    OCT4List                 spis optional
+  } with {
+    variant (payload_header) "LENGTHTO (payload_header, protocol_id, spi_size, nr_of_spis, spis)"
+    variant (payload_header) "LENGTHINDEX (payload_length)"
+    variant (protocol_id) "FIELDLENGTH (8)"
+  }
+  
+  type record Vendor_ID_Payload
+  {
+    Payload_Header            payload_header,
+    octetstring               vendor_id optional
+  } with {
+    variant (payload_header) "LENGTHTO (payload_header, vendor_id)"
+    variant (payload_header) "LENGTHINDEX (payload_length)"
+  }
+  
+  type record Traffic_Selector_Payload
+  {
+    Payload_Header            payload_header,
+    INT1                      nr_of_traffic_selectors,
+    LIN3_BO_LAST              reserved(0),
+    Traffic_Selectors         traffic_selectors
+  } with {
+    variant (payload_header) "LENGTHTO (payload_header, nr_of_traffic_selectors, reserved, traffic_selectors)"
+    variant (payload_header) "LENGTHINDEX (payload_length)"
+    variant (nr_of_traffic_selectors) "LENGTHTO(traffic_selectors)"
+    variant (nr_of_traffic_selectors) "UNIT(elements)"
+  }
+  
+  type record of Traffic_Selector Traffic_Selectors;
+  
+  type record Traffic_Selector
+  {
+    Traffic_Selector_Type       traffic_selector_type,
+    Second_Octet                second_octet,
+    LIN2_BO_LAST                selector_length,
+    Selector                    selector      
+  } with {
+    variant (traffic_selector_type) "FIELDLENGTH (8)"
+    variant (second_octet) "CROSSTAG(
+    ip_protocol_id, traffic_selector_type = TS_IPv4_Address_Range;
+    ip_protocol_id, traffic_selector_type = TS_IPv6_Address_Range)"
+    variant (selector_length) "LENGTHTO(traffic_selector_type, second_octet, selector_length, selector)"
+    variant (selector) "CROSSTAG(
+    ipv4_range, traffic_selector_type = TS_IPv4_Address_Range;
+    ipv6_range, traffic_selector_type = TS_IPv6_Address_Range)"
+  }
+  
+  type union Second_Octet
+  {
+    INT1                      ip_protocol_id
+  }
+  
+  type union Selector
+  {
+    IPv4_Range                ipv4_range,
+    IPv6_Range                ipv6_range
+  }
+  
+  type OCT16 IPv6_Address;
+  type OCT4 IPv4_Address;
+  
+  type record IPv4_Range
+  {
+    LIN2_BO_LAST                start_port,
+    LIN2_BO_LAST                end_port,
+    IPv4_Address                starting_address,
+    IPv4_Address                ending_address
+  }
+  
+  type record IPv6_Range
+  {
+    LIN2_BO_LAST                start_port,
+    LIN2_BO_LAST                end_port,
+    IPv6_Address                starting_address,
+    IPv6_Address                ending_address
+  }
+  
+  type record Encrypted_Payload
+  {
+    Payload_Header            payload_header,
+    octetstring               encrypted_data
+  } with {
+    variant (payload_header) "LENGTHTO (payload_header,encrypted_data)"
+    variant (payload_header) "LENGTHINDEX (payload_length)"
+  }
+  
+  type record Configuration_Payload
+  {
+    Payload_Header            payload_header,
+    CFG_Type                  cfg_type,
+    LIN3_BO_LAST              reserved(0),
+    Configuration_Attributes  configuration_attributes
+  } with {
+    variant (payload_header) "LENGTHTO (payload_header, cfg_type, reserved, configuration_attributes)"
+    variant (payload_header) "LENGTHINDEX (payload_length)"
+    variant (cfg_type) "FIELDLENGTH (8)"
+  }
+  
+  type record of Configuration_Attribute Configuration_Attributes;
+  
+  type record Configuration_Attribute
+  {
+    BIT1                        reserved('0'B),
+    Configure_Attribute_Type    attribute_type,
+    LIN2_BO_LAST                attribute_length,
+    octetstring                 attribute_value optional
+  } with {
+    variant (reserved, attribute_type) "FIELDORDER(msb)"
+    variant (attribute_type) "FIELDLENGTH(15)"
+    variant (attribute_type) "BYTEORDER(last)"
+    variant (attribute_length) "LENGTHTO(attribute_value)"
+  }
+  
+  type record EAP_Payload
+  {
+    Payload_Header             payload_header,
+    EAP_Message                eap_message
+  }
+  
+  type record EAP_Message
+  {
+    EAP_Code                  code,
+    INT1                      id,
+    LIN2_BO_LAST              eap_length,
+    Request_Type              request_type optional,
+    octetstring               eap_data optional
+  } with {
+    variant (code, request_type) "FIELDLENGTH (8)"
+    variant (eap_length) "LENGTHTO(code, id, eap_length, request_type, eap_data)"
+  }
+  
+  type enumerated Exchange_Type
+  {
+      IKE_SA_INIT (34),
+      IKE_AUTH (35),
+      CREATE_CHILD (36),
+      INFOMATIONAL (37),
+      IKE_SESSION_RESUME (38),
+      GSA_AUTH (39),
+      GSA_REGISTRATION (40),
+      GSA_REKEY (41)
+  }
+  
+  type enumerated Next_Payload_Type
+  {
+    No_Next_Payload (0),
+    Security_Association (33),
+    Key_Exchange (34),
+    Id_Initiator  (35),
+    Id_Responder (36),
+    Certificate (37),
+    Certificate_Request (38),
+    Authentication (39),
+    Nonce (40),
+    Notify (41),
+    Delete (42), 
+    Vendor_Id (43),
+    Traffic_Selector_Initiator (44),
+    Traffic_Selector_Responder (45),
+    Encrypted (46),
+    Configuration (47),
+    EAP (48)
+  }
+  
+  type enumerated Protocol_Id
+  {
+    Reserved (0),
+    IKE (1),
+    AH (2),
+    ESP (3)
+  }
+  
+  type enumerated Transform_Type
+  {
+    ENCR (1),
+    PRF (2),
+    INTEG (3),
+    DH (4),
+    ESN (5)
+  }
+  
+  type enumerated ENCR
+  {
+    RESERVED (0),
+    DES_IV64 (1),
+    DES (2),
+    DES3 (3),
+    RCS (4),
+    IDEA (5),
+    CAST (6),
+    BLOWFISH (7),
+    IDEA3 (8),
+    DES_IV32 (9),
+    NULL_ENCR (11),
+    AES_CBC (12),
+    AES_CRT (13)
+  }
+  
+  type enumerated PRF
+  {
+    HMAC_MD5 (1),
+    HMAC_SHA1 (2),
+    HMAC_TIGER (3),
+    AES128_XCBC (4)
+  }
+  
+  type enumerated AUTH
+  {
+    NONE (0),
+    HMAC_MD5_96 (1),
+    HMAC_SHA1_96 (2),
+    DES_MAC (3),
+    KPDK_MD5 (4),
+    AES_XCBC_96 (5)
+  }
+  
+  type enumerated DH
+  {
+    NONE (0),
+    MODP_768 (1),
+    MODP_1024 (2),
+    MODP_1536 (5),
+    MODP_2048 (14),
+    MODP_3072 (15),
+    MODP_4096 (16),
+    MODP_6144 (17),
+    MODP_8192 (18)
+  }
+  
+  type enumerated ESN
+  {
+    no_ESN (0),
+    Extended_Sequence_Number (1)
+  }
+  
+  type enumerated Transform_Attribute_Type
+  {
+    Key_Length (14)
+  }
+  
+  type enumerated Id_Type
+  {
+    IPv4_Addr (1),
+    FQDN (2),
+    RFC822_Addr (3),
+    IPV_Addr (5),
+    DER_ASN1_DN (9),
+    DER_ADN1_GN (10),
+    KEY_ID (11)
+  }
+  
+  type enumerated Certificate_Encoding
+  {
+    PKCS_7_Wrapped_X509_Certificate (1),
+    PGP_Certificate (2),
+    DNS_Signed_Key (3),
+    X509_Certificate_Signature (4),
+    Kerberos_Token (6),
+    Certificate_Revocation_List (7),
+    Authority_Revocation_List (8),
+    SPKI_Certificate (9),
+    X509_Certificate_Attribute (10),
+    Raw_RSA_Key (11),
+    Hash_and_URL_of_X509_Certificate (12),
+    Hash_and_URL_of_X509_Bundle (13)
+  }
+  
+  type enumerated Authentication_Method
+  {
+    RSA_Digital_Signature (1),
+    Shared_Key_Message_Integrity_Code (2),
+    DSS_Digital_Signature (3)
+  }
+  
+  type enumerated Notify_Message_Type
+  {
+    Unsupported_Critical_Payload (1),
+    Invalid_IKE_SPI (4),
+    Invalid_Major_Version (5),
+    Invalid_Syntax (7),
+    Invalid_Message_Id (9),
+    Invalid_SPI (11),
+    No_Proposal_Chosen (14),
+    Invalid_KE_Payload (17),
+    Authentication_Failed (24),
+    Single_Pair_Required (34),
+    No_Additional_SAS (35),
+    Internal_Address_Failure (36),
+    Failed_CP_Required (37),
+    TS_Unacceptable (38),
+    Invalid_Selectors (39),
+    Unacceptable_Addresses (40),
+    Unexpected_NAT_Detected (41),
+    Use_Assigned_HoA (42),
+    Temporary_Failure (43),
+    Child_SA_Not_Found (44),
+    Invalid_Group_Id (45),
+    Authorization_Failed (46),
+    Initial_Contact (16384),
+    Set_Window_Size (16385),
+    Additional_TS_Possible (16386),
+    IPComp_Supported (16387),
+    NAT_Detection_Source_IP (16388),
+    NAT_Detection_Destination_IP (16389),
+    Cookie (16390),
+    Use_Transport_Mode (16391),
+    HTTP_Cert_Lookup_Supported (16392),
+    Rekey_SA (16393),
+    ESP_TFC_Padding_Not_Supported (16394),
+    Non_First_Fragments_Also (16395),
+    Mobike_Supported (16396),
+    Additional_IP4_Address (16397),
+    Additional_IP6_Address (16398),
+    No_Additional_Addresses (16399),
+    Update_SA_Addresses (16400),
+    Cookie2 (16401),
+    No_NATs_Allowed (16402),
+    Auth_Lifetime (16403),
+    Multiple_Auth_Supported (16404),
+    Another_Auth_Follows (16405),
+    Redirect_Supported (16406),
+    Redirect (16407),
+    Redirect_From (16408),
+    Ticket_LT_Opaque (16409),
+    Ticket_Request (16410),
+    Ticket_Ack (16411),
+    Ticket_NAck (16412),
+    Ticket_Opaque (16413),
+    Link_Id (16414),
+    Use_WESP_Mode (16415),
+    ROHC_Supported (16416),
+    EAP_Only_Authentication (16417),
+    Childless_IKEv2_Supported (16418),
+    Quick_Crash_Detection (16419),
+    IKEv2_Message_Id_Sync_Supported (16420),
+    IPsec_Replay_Conter_Sync_Supported (16421),
+    IKEv2_Message_Id_Sync (16422),
+    IPsec_Replay_Counter_Sync (16423),
+    Secure_Password_Methods (16424),
+    PSK_Persist (16425),
+    PSK_Confirm (16426),
+    ERX_Supported (16427),
+    IFOM_Capability (16428),
+    Sender_Request_Id (16429)
+  }
+  
+  type enumerated Traffic_Selector_Type
+  {
+    TS_IPv4_Address_Range (7),
+    TS_IPv6_Address_Range (8)
+  }
+  
+  type enumerated CFG_Type
+  {
+    Request (1),
+    Reply (2),
+    CFG_Set (3),
+    ACK (4)
+  }
+  
+  type enumerated Configure_Attribute_Type
+  {
+    Internal_IP4_Address (1),
+    Internal_IP4_Netmask (2),
+    Internal_IP4_DNS (3),
+    Internal_IP4_NBNS (4),
+    Internal_Address_Expiry (5),
+    Internal_IP4_DHCP (6),
+    Application_Version (7),
+    Internal_IP6_Address (8),
+    Internal_IP6_DNS (10),
+    Internal_IP6_NBNS (11),
+    Internal_IP6_DHCP (12),
+    Internal_IP4_Subnet (13),
+    Supported_Attributes (14),
+    Internal_IP6_Subnet (15)
+  }
+  
+  type enumerated EAP_Code
+  {
+    Request (1),
+    Response (2),
+    Success (3),
+    Failure (4)
+  }
+  
+  type enumerated Request_Type
+  {
+    Identity (1),
+    Notification (2),
+    Nak (3),
+    MD5_Challenge (4),
+    One_Time_Password (5),
+    Generic_Token_Card (6)
+  }
+  
+}//end of module
+with {
+encode "RAW"
+extension "version R2A"
+}
