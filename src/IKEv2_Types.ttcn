@@ -12,7 +12,7 @@
 //
 //  File:               IKEv2_Types.ttcn
 //  Description:        
-//  Rev:                R2A
+//  Rev:                R3C
 //  Prodnr:             CNL 113 801
 //  Reference:          http://tools.ietf.org/search/rfc4306
 //
@@ -413,6 +413,9 @@ module IKEv2_Types
   {
     Payload_Header             payload_header,
     EAP_Message                eap_message
+  } with {
+    variant (payload_header) "LENGTHTO (payload_header, eap_message)"
+    variant (payload_header) "LENGTHINDEX (payload_length)"
   }
   
   type record EAP_Message
@@ -432,7 +435,7 @@ module IKEv2_Types
       IKE_SA_INIT (34),
       IKE_AUTH (35),
       CREATE_CHILD (36),
-      INFOMATIONAL (37),
+      INFORMATIONAL (37),
       IKE_SESSION_RESUME (38),
       GSA_AUTH (39),
       GSA_REGISTRATION (40),
@@ -689,11 +692,16 @@ module IKEv2_Types
     Nak (3),
     MD5_Challenge (4),
     One_Time_Password (5),
-    Generic_Token_Card (6)
+    Generic_Token_Card (6),
+    Tls (13),
+    Sim (18),
+    Ttls (21),
+    Aka (23),
+    AkaPrime (50)
   }
   
 }//end of module
 with {
 encode "RAW"
-extension "version R2A"
+extension "version R3C"
 }
